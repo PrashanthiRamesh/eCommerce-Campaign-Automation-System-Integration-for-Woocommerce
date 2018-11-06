@@ -57,6 +57,10 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 	 */
 	protected $version;
 
+	//The namespace and version for the REST SERVER
+	protected $my_namespace = 'campaignit/v';
+	protected $my_version   = '1';
+
 	/**
 	 * Define the core functionality of the plugin.
 	 *
@@ -78,6 +82,7 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 		$this->set_locale();
 		$this->define_admin_hooks();
 		$this->define_public_hooks();
+		$this->define_rest_api_hook();	//rest api hook init
 
 	}
 
@@ -213,6 +218,54 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 	 */
 	public function get_version() {
 		return $this->version;
+	}
+
+	/**
+	 * Rest API Initiate
+	 */
+
+	public function define_rest_api_hook(){
+			$this->loader->add_action('rest_api_init', $this, 'integrate');
+	}
+
+
+	public function integrate(){
+			$namespace = $this->my_namespace . $this->my_version;
+			$base      = 'integrate';
+			register_rest_route( $namespace, '/' . $base, array(
+					array(
+							'methods'         => \WP_REST_Server::READABLE,
+							'callback'        => array( $this, 'test' ),
+				 ),
+					array(
+							'methods'         => \WP_REST_Server::CREATABLE,
+							'callback'        => array( $this, 'get_all' ),
+					)
+			)  );
+	}
+
+	public function test(){
+			return 'yay';
+	}
+
+	public function get_all( \WP_REST_Request $request ){
+			$remote_params= $request->get_body_params();
+			$remote_email=$remote_params['woo-email'];
+			$remote_user_name=$remote_params['woo-username'];
+			$remote_password=$remote_params['woo-password'];
+			if(!isset($remote_user_name) || !isset($remote_password) || !isset($remote_email)){
+					return new \WP_Error('Fail','Provide woo-email, woo-username and woo-password',array('status'=>401));
+			}
+			$user=get_user_by('email', $remote_email);
+			if($user->user_login==$remote_user_name){		// compare username
+					if ( $user && wp_check_password( $remote_password, $user->data->user_pass, $user->ID) ){		//compare md5 hash of password
+							return array('integration'=>true);		//return all data
+					}else{
+							return new \WP_Error('Fail','Incorrect Password'.$user->user_pass_md5,array('status'=>401));
+					}
+			}else{
+					return new \WP_Error('Fail','Incorrect Username'.$current_user->user_login,array('status'=>401));
+			}
 	}
 
 }
