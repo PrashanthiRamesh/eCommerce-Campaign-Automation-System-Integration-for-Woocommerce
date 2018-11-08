@@ -257,9 +257,20 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 			}
 			$user=get_user_by('email', $remote_email);
 			if($user->user_login==$remote_user_name){		// compare username
-					if ( $user && wp_check_password( $remote_password, $user->data->user_pass, $user->ID) ){		//compare md5 hash of password
-							$products=$this->get_products();
-							return array('integration'=>true, 'products'=>$products);		//return all data
+					if ( $user && wp_check_password( $remote_password, $user->data->user_pass, $user->ID) ){ //compare md5 hash of password
+					$user_meta       = get_user_meta($user->ID); 	// Get the user object.
+					$user_level=$user_meta['wp_user_level'][0];
+							if( $user_level==10 ){		//check if user is admin
+								$products=$this->get_products();
+								$categories=$this->get_categories();
+								return array(
+									'integration'=>true,
+									'products'=>$products,
+									'categories'=>$categories
+								);		//return all data
+							}else{
+								return new \WP_Error('Fail','Ops ! You are not Authorised to access the requested information.'.$user->user_pass_md5,array('status'=>401));
+							}
 					}else{
 							return new \WP_Error('Fail','Incorrect Password'.$user->user_pass_md5,array('status'=>401));
 					}
@@ -283,10 +294,24 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 				'sku'=>$product->get_sku(),
 				'price'=>$product->get_price(),
 				'category_ids'=>$product->get_category_ids()
-
 			);
 		}
 		return $products;
+	}
+
+	public function get_categories(){
+		$args = array(
+		'taxonomy'   => "product_cat"
+
+);
+		$product_categories = get_terms($args);
+			foreach ($product_categories as $product_category) {
+				$categories[]=array(
+					'id'=>$product_category->term_id,
+					'name'=>$product_category->name
+				);
+			}
+		return $categories;
 	}
 
 }
