@@ -225,9 +225,8 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 	 */
 
 	public function define_rest_api_hook(){
-			$this->loader->add_action('rest_api_init', $this, 'integrate');
+		$this->loader->add_action('rest_api_init', $this, 'integrate');
 	}
-
 
 	public function integrate(){
 			$namespace = $this->my_namespace . $this->my_version;
@@ -259,13 +258,35 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 			$user=get_user_by('email', $remote_email);
 			if($user->user_login==$remote_user_name){		// compare username
 					if ( $user && wp_check_password( $remote_password, $user->data->user_pass, $user->ID) ){		//compare md5 hash of password
-							return array('integration'=>true);		//return all data
+							$products=$this->get_products();
+							return array('integration'=>true, 'products'=>$products);		//return all data
 					}else{
 							return new \WP_Error('Fail','Incorrect Password'.$user->user_pass_md5,array('status'=>401));
 					}
 			}else{
 					return new \WP_Error('Fail','Incorrect Username'.$current_user->user_login,array('status'=>401));
 			}
+	}
+
+	public function get_products(){
+		$args     = array( 'post_type' => 'product', 'posts_per_page' => -1 );
+		$woo_products = get_posts( $args );
+		$products=array();
+		foreach ($woo_products as $woo_product) {
+			$product_id=$woo_product->ID;
+			$product= wc_get_product( $product_id);
+			$products[]=array(
+				'id'=>$product_id,
+				'name'=>$product->name,
+				'created_at'=>$product->get_date_created(),
+				'modified_at'=>$product->get_date_modified(),
+				'sku'=>$product->get_sku(),
+				'price'=>$product->get_price(),
+				'category_ids'=>$product->get_category_ids()
+
+			);
+		}
+		return $products;
 	}
 
 }
