@@ -178,7 +178,16 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 
+		/*
+		* Update Last seen of user
+		*/
+		$this->loader->add_action('wp_footer',$this, 'user_last_login');
+
 	}
+
+	function user_last_login( $user_login, $user ) {
+	update_user_meta( $user->ID, 'last_login', time() );
+}
 
 	/**
 	 * Run the loader to execute all of the hooks with WordPress.
@@ -258,15 +267,17 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 			$user=get_user_by('email', $remote_email);
 			if($user->user_login==$remote_user_name){		// compare username
 					if ( $user && wp_check_password( $remote_password, $user->data->user_pass, $user->ID) ){ //compare md5 hash of password
-					$user_meta       = get_user_meta($user->ID); 	// Get the user object.
+					$user_meta = get_user_meta($user->ID); 	// Get the user object.
 					$user_level=$user_meta['wp_user_level'][0];
 							if( $user_level==10 ){		//check if user is admin
 								$products=$this->get_products();
 								$categories=$this->get_categories();
+								$customers=$this->get_customers();
 								return array(
 									'integration'=>true,
 									'products'=>$products,
-									'categories'=>$categories
+									'categories'=>$categories,
+									'customers'=>$customers
 								);		//return all data
 							}else{
 								return new \WP_Error('Fail','Ops ! You are not Authorised to access the requested information.'.$user->user_pass_md5,array('status'=>401));
@@ -302,8 +313,7 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 	public function get_categories(){
 		$args = array(
 		'taxonomy'   => "product_cat"
-
-);
+		);
 		$product_categories = get_terms($args);
 			foreach ($product_categories as $product_category) {
 				$categories[]=array(
@@ -312,6 +322,37 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 				);
 			}
 		return $categories;
+	}
+
+	public function get_customers(){
+				$wp_users = get_users();
+				$users=array();
+				foreach($wp_users as $wp_user){
+					$user = get_userdata( $wp_user->ID );
+					$user_meta=get_user_meta($wp_user->ID);
+					if($user->roles[0]!='administrator'){
+						$last_seen=is_null($user_meta['last_seen'][0])?$user->user_registered:$user_meta['last_seen'][0];
+						//  $the_last_seen_date = human_time_diff($last_seen);
+						$users[]=array(
+							'id'=>$user->ID,
+							'email'=>$user->user_email,
+							'username'=>$user->user_login,
+							'first_name'=>$user_meta['first_name'][0],
+							'last_name'=>$user_meta['last_name'][0],
+							'created_at'=>$user->user_registered,
+							'last_seen'=> $last_seen
+						);
+					}
+				}
+				return $users;
+	}
+
+	public function get_orders(){
+				global $wpdb;
+				$sql = "SELECT * FROM $wpdb->posts WHERE post_type='shop_order'";
+				$orders = $wpdb->get_results( $sql);
+				$order_ids=wp_list_pluck($orders,'ID');
+				return $order_ids;
 	}
 
 }
