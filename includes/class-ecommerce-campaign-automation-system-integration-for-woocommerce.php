@@ -273,11 +273,13 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 								$products=$this->get_products();
 								$categories=$this->get_categories();
 								$customers=$this->get_customers();
+								$orders=$this->get_orders();
 								return array(
 									'integration'=>true,
 									'products'=>$products,
 									'categories'=>$categories,
-									'customers'=>$customers
+									'customers'=>$customers,
+									'orders'=>$orders
 								);		//return all data
 							}else{
 								return new \WP_Error('Fail','Ops ! You are not Authorised to access the requested information.'.$user->user_pass_md5,array('status'=>401));
@@ -350,9 +352,82 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 	public function get_orders(){
 				global $wpdb;
 				$sql = "SELECT * FROM $wpdb->posts WHERE post_type='shop_order'";
-				$orders = $wpdb->get_results( $sql);
-				$order_ids=wp_list_pluck($orders,'ID');
-				return $order_ids;
+				$woo_orders = $wpdb->get_results( $sql);
+				$order_ids=wp_list_pluck($woo_orders,'ID');
+				$orders=array();
+				foreach ($order_ids as $order_id){
+					$order = new \WC_Order($order_id);
+					if($order && gettype($order)=='object') {
+							$post_order_items = $order->get_items();
+							$order_items = array();
+							if (!empty($post_order_items)) {
+									foreach ($post_order_items as $post_order_item) {
+											$order_item_data = $post_order_item->get_data();
+											$product_id = empty($order_item_data['variation_id']) ? $order_item_data['product_id'] : $order_item_data['variation_id'];
+											$product = wc_get_product($product_id);
+											if (gettype($product) == 'object') {
+													$order_items[] = array(
+															'r_product_id' => $product_id,
+															'sku' => empty($product->get_sku()) ? $product_id : $product->get_sku(),
+															'product_name' => $product->get_title(),
+															'product_price' => $product->get_price(),
+															'item_qty' => $post_order_item->get_quantity(),
+																		);
+
+											} else {
+													$order_items[] = array(
+															'r_product_id' => empty($product_id)?$order_item_data['id']:$product_id,
+															'sku' => empty($product_id)?$order_item_data['id']:$product_id,
+															'product_name' => $post_order_item->get_name(),
+															'product_price' => $post_order_item['line_total'],
+															'item_qty' => $post_order_item['qty'],
+																											);
+											}
+									}
+							} else {
+									return array();
+							}
+							$billing = array(
+									'first_name' => $order->get_billing_first_name(),
+									'last_name' => $order->get_billing_last_name(),
+					 				'email' => $order->get_billing_email(),
+									'mobile' => $order->get_billing_phone(),
+									'address_1' => $order->get_billing_address_1(),
+									'address_2' => $order->get_billing_address_2(),
+									'city' => $order->get_billing_city(),
+									'state' => $order->get_billing_state(),
+									'country' => $order->get_billing_country(),
+									'zipcode' => $order->get_billing_postcode()
+							);
+							$shipping = array(
+									'first_name' => !empty($order->get_shipping_first_name()) ? $order->get_shipping_first_name() : $order->get_billing_first_name(),
+									'last_name' => !empty($order->get_shipping_last_name()) ? $order->get_shipping_last_name() : $order->get_billing_last_name(),
+									'email' => $order->get_billing_email(),             //note: No Shipping Email
+									'mobile' => $order->get_billing_phone(),            //note: No Shipping Phone
+									'address_1' => !empty($order->get_shipping_address_1()) ? $order->get_shipping_address_1() : $order->get_billing_address_1(),
+									'address_2' => !empty($order->get_shipping_address_2()) ? $order->get_shipping_address_2() : $order->get_billing_address_2(),
+									'city' => !empty($order->get_shipping_city()) ? $order->get_shipping_city() : $order->get_billing_state(),
+									'state' => !empty($order->get_shipping_state()) ? $order->get_shipping_state() : $order->get_billing_state(),
+									'country' => !empty($order->get_shipping_country()) ? $order->get_shipping_country() : $order->get_billing_country(),
+									'zipcode' => !empty($order->get_shipping_postcode()) ? $order->get_shipping_postcode() : $order->get_billing_postcode(),
+							);
+
+							$created_at = empty($order->get_date_created()) ? current_time('mysql') : $order->get_date_created()->date('Y-m-d H:i:s');
+							$updated_at = empty($order->get_date_modified()) ? current_time('mysql') : $order->get_date_modified()->date('Y-m-d H:i:s');
+							$orders[] = array(
+									'id' => $order->get_id(),
+									'customer_email' => $order->get_billing_email(),
+									'customer_name' => $order->get_billing_first_name(),
+									'order_total' => $order->get_total(),
+									'order_items' => $order_items,
+									'shipping' => $shipping,
+									'billing' => $billing,
+									'created_at' => $created_at,
+									'updated_at' => $updated_at,
+							);
+					}
+				}
+				return $orders;
 	}
 
 }
