@@ -239,24 +239,49 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 
 	public function integrate(){
 			$namespace = $this->my_namespace . $this->my_version;
-			$base      = 'integrate';
+			$base="integrate";
+			$base_products      = 'woo/get/all/products';
+				$base_categories      = 'woo/get/all/categories';
+					$base_orders      = 'woo/get/all/orders';
+						$base_customers      = 'woo/get/all/customers';
 			register_rest_route( $namespace, '/' . $base, array(
 					array(
 							'methods'         => \WP_REST_Server::READABLE,
 							'callback'        => array( $this, 'test' ),
-				 ),
-					array(
-							'methods'         => \WP_REST_Server::CREATABLE,
-							'callback'        => array( $this, 'get_all' ),
 					)
 			)  );
+			register_rest_route( $namespace, '/' . $base_products, array(
+					array(
+							'methods'         => \WP_REST_Server::CREATABLE,
+							'callback'        => array( $this, 'get_all_products' ),
+					)
+			)  );
+			register_rest_route( $namespace, '/' . $base_categories, array(
+					array(
+							'methods'         => \WP_REST_Server::CREATABLE,
+							'callback'        => array( $this, 'get_all_categories' ),
+					)
+			)  );
+			register_rest_route( $namespace, '/' . $base_orders, array(
+					array(
+							'methods'         => \WP_REST_Server::CREATABLE,
+							'callback'        => array( $this, 'get_all_orders' ),
+					)
+			)  );
+			register_rest_route( $namespace, '/' . $base_customers, array(
+					array(
+							'methods'         => \WP_REST_Server::CREATABLE,
+							'callback'        => array( $this, 'get_all_customers' ),
+					)
+			)  );
+
 	}
 
 	public function test(){
 			return 'yay';
 	}
 
-	public function get_all( \WP_REST_Request $request ){
+	public function get_all_products( \WP_REST_Request $request ){
 			$remote_params= $request->get_body_params();
 			$remote_email=$remote_params['woo-email'];
 			$remote_user_name=$remote_params['woo-username'];
@@ -270,17 +295,85 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 					$user_meta = get_user_meta($user->ID); 	// Get the user object.
 					$user_level=$user_meta['wp_user_level'][0];
 							if( $user_level==10 ){		//check if user is admin
-								$products=$this->get_products();
-								$categories=$this->get_categories();
-								$customers=$this->get_customers();
-								$orders=$this->get_orders();
-								return array(
-									'integration'=>true,
-									'products'=>$products,
-									'categories'=>$categories,
-									'customers'=>$customers,
-									'orders'=>$orders
-								);		//return all data
+								return $this->get_products();		//return all data
+							}else{
+								return new \WP_Error('Fail','Ops ! You are not Authorised to access the requested information.'.$user->user_pass_md5,array('status'=>401));
+							}
+					}else{
+							return new \WP_Error('Fail','Incorrect Password'.$user->user_pass_md5,array('status'=>401));
+					}
+			}else{
+					return new \WP_Error('Fail','Incorrect Username'.$current_user->user_login,array('status'=>401));
+			}
+	}
+
+	public function get_all_categories( \WP_REST_Request $request ){
+			$remote_params= $request->get_body_params();
+			$remote_email=$remote_params['woo-email'];
+			$remote_user_name=$remote_params['woo-username'];
+			$remote_password=$remote_params['woo-password'];
+			if(!isset($remote_user_name) || !isset($remote_password) || !isset($remote_email)){
+					return new \WP_Error('Fail','Provide woo-email, woo-username and woo-password',array('status'=>401));
+			}
+			$user=get_user_by('email', $remote_email);
+			if($user->user_login==$remote_user_name){		// compare username
+					if ( $user && wp_check_password( $remote_password, $user->data->user_pass, $user->ID) ){ //compare md5 hash of password
+					$user_meta = get_user_meta($user->ID); 	// Get the user object.
+					$user_level=$user_meta['wp_user_level'][0];
+							if( $user_level==10 ){		//check if user is admin
+								return $this->get_categories();		//return all data
+							}else{
+								return new \WP_Error('Fail','Ops ! You are not Authorised to access the requested information.'.$user->user_pass_md5,array('status'=>401));
+							}
+					}else{
+							return new \WP_Error('Fail','Incorrect Password'.$user->user_pass_md5,array('status'=>401));
+					}
+			}else{
+					return new \WP_Error('Fail','Incorrect Username'.$current_user->user_login,array('status'=>401));
+			}
+	}
+
+	public function get_all_orders( \WP_REST_Request $request ){
+			$remote_params= $request->get_body_params();
+			$remote_email=$remote_params['woo-email'];
+			$remote_user_name=$remote_params['woo-username'];
+			$remote_password=$remote_params['woo-password'];
+			if(!isset($remote_user_name) || !isset($remote_password) || !isset($remote_email)){
+					return new \WP_Error('Fail','Provide woo-email, woo-username and woo-password',array('status'=>401));
+			}
+			$user=get_user_by('email', $remote_email);
+			if($user->user_login==$remote_user_name){		// compare username
+					if ( $user && wp_check_password( $remote_password, $user->data->user_pass, $user->ID) ){ //compare md5 hash of password
+					$user_meta = get_user_meta($user->ID); 	// Get the user object.
+					$user_level=$user_meta['wp_user_level'][0];
+							if( $user_level==10 ){		//check if user is admin
+								return $this->get_orders();		//return all data
+							}else{
+								return new \WP_Error('Fail','Ops ! You are not Authorised to access the requested information.'.$user->user_pass_md5,array('status'=>401));
+							}
+					}else{
+							return new \WP_Error('Fail','Incorrect Password'.$user->user_pass_md5,array('status'=>401));
+					}
+			}else{
+					return new \WP_Error('Fail','Incorrect Username'.$current_user->user_login,array('status'=>401));
+			}
+	}
+
+	public function get_all_customers( \WP_REST_Request $request ){
+			$remote_params= $request->get_body_params();
+			$remote_email=$remote_params['woo-email'];
+			$remote_user_name=$remote_params['woo-username'];
+			$remote_password=$remote_params['woo-password'];
+			if(!isset($remote_user_name) || !isset($remote_password) || !isset($remote_email)){
+					return new \WP_Error('Fail','Provide woo-email, woo-username and woo-password',array('status'=>401));
+			}
+			$user=get_user_by('email', $remote_email);
+			if($user->user_login==$remote_user_name){		// compare username
+					if ( $user && wp_check_password( $remote_password, $user->data->user_pass, $user->ID) ){ //compare md5 hash of password
+					$user_meta = get_user_meta($user->ID); 	// Get the user object.
+					$user_level=$user_meta['wp_user_level'][0];
+							if( $user_level==10 ){		//check if user is admin
+								return $this->get_customers();		//return all data
 							}else{
 								return new \WP_Error('Fail','Ops ! You are not Authorised to access the requested information.'.$user->user_pass_md5,array('status'=>401));
 							}
