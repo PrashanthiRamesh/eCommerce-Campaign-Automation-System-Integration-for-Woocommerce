@@ -240,10 +240,11 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 	public function integrate(){
 			$namespace = $this->my_namespace . $this->my_version;
 			$base="integrate";
-			$base_products      = 'woo/get/all/products';
-				$base_categories      = 'woo/get/all/categories';
-					$base_orders      = 'woo/get/all/orders';
-						$base_customers      = 'woo/get/all/customers';
+			$base_products = 'woo/get/all/products';
+			$base_categories = 'woo/get/all/categories';
+			$base_orders = 'woo/get/all/orders';
+			$base_customers = 'woo/get/all/customers';
+			$base_abandoned_cart = 'woo/get/all/abandoned_carts';
 			register_rest_route( $namespace, '/' . $base, array(
 					array(
 							'methods'         => \WP_REST_Server::READABLE,
@@ -274,11 +275,20 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 							'callback'        => array( $this, 'get_all_customers' ),
 					)
 			)  );
+			register_rest_route( $namespace, '/' . $base_abandoned_cart, array(
+					array(
+							'methods'         => \WP_REST_Server::CREATABLE,
+							'callback'        => array( $this, 'get_all_abandoned_carts' ),
+					)
+			)  );
 
 	}
 
 	public function test(){
-			return 'yay';
+		global $wpdb;
+		$results = $wpdb->get_results( "SELECT * FROM wp_woocommerce_sessions");
+
+		return $results;
 	}
 
 	public function get_all_products( \WP_REST_Request $request ){
@@ -385,6 +395,32 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 			}
 	}
 
+	public function get_all_abandoned_carts( \WP_REST_Request $request ){
+			$remote_params= $request->get_body_params();
+			$remote_email=$remote_params['woo-email'];
+			$remote_user_name=$remote_params['woo-username'];
+			$remote_password=$remote_params['woo-password'];
+			if(!isset($remote_user_name) || !isset($remote_password) || !isset($remote_email)){
+					return new \WP_Error('Fail','Provide woo-email, woo-username and woo-password',array('status'=>401));
+			}
+			$user=get_user_by('email', $remote_email);
+			if($user->user_login==$remote_user_name){		// compare username
+					if ( $user && wp_check_password( $remote_password, $user->data->user_pass, $user->ID) ){ //compare md5 hash of password
+					$user_meta = get_user_meta($user->ID); 	// Get the user object.
+					$user_level=$user_meta['wp_user_level'][0];
+							if( $user_level==10 ){		//check if user is admin
+								return $this->get_abandoned_carts();		//return all data
+							}else{
+								return new \WP_Error('Fail','Ops ! You are not Authorised to access the requested information.'.$user->user_pass_md5,array('status'=>401));
+							}
+					}else{
+							return new \WP_Error('Fail','Incorrect Password'.$user->user_pass_md5,array('status'=>401));
+					}
+			}else{
+					return new \WP_Error('Fail','Incorrect Username'.$current_user->user_login,array('status'=>401));
+			}
+	}
+
 	public function get_products(){
 		$args     = array( 'post_type' => 'product', 'posts_per_page' => -1 );
 		$woo_products = get_posts( $args );
@@ -395,11 +431,9 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 			$products[]=array(
 				'id'=>$product_id,
 				'name'=>$product->name,
-				'created_at'=>$product->get_date_created(),
-				'modified_at'=>$product->get_date_modified(),
 				'sku'=>$product->get_sku(),
 				'price'=>$product->get_price(),
-				'category_ids'=>$product->get_category_ids()
+				'categories'=>$this->get_woo_categories($product->get_category_ids())
 			);
 		}
 		return $products;
@@ -416,6 +450,18 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 					'name'=>$product_category->name
 				);
 			}
+		return $categories;
+	}
+
+	public function get_woo_categories($ids){
+		$categories=array();
+		foreach ($ids as $id) {
+			$term = get_term_by( 'id', $id, 'product_cat', 'ARRAY_A' );
+	 		$categories[]=array(
+				'id'=>$id,
+				'name'=>$term['name']
+			);
+		}
 		return $categories;
 	}
 
@@ -480,7 +526,7 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 							} else {
 									return array();
 							}
-							$billing = array(
+							$billing =array(array(
 									'first_name' => $order->get_billing_first_name(),
 									'last_name' => $order->get_billing_last_name(),
 					 				'email' => $order->get_billing_email(),
@@ -491,8 +537,8 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 									'state' => $order->get_billing_state(),
 									'country' => $order->get_billing_country(),
 									'zipcode' => $order->get_billing_postcode()
-							);
-							$shipping = array(
+							)) ;
+							$shipping =array(array(
 									'first_name' => !empty($order->get_shipping_first_name()) ? $order->get_shipping_first_name() : $order->get_billing_first_name(),
 									'last_name' => !empty($order->get_shipping_last_name()) ? $order->get_shipping_last_name() : $order->get_billing_last_name(),
 									'email' => $order->get_billing_email(),             //note: No Shipping Email
@@ -503,7 +549,7 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 									'state' => !empty($order->get_shipping_state()) ? $order->get_shipping_state() : $order->get_billing_state(),
 									'country' => !empty($order->get_shipping_country()) ? $order->get_shipping_country() : $order->get_billing_country(),
 									'zipcode' => !empty($order->get_shipping_postcode()) ? $order->get_shipping_postcode() : $order->get_billing_postcode(),
-							);
+							)) ;
 
 							$created_at = empty($order->get_date_created()) ? current_time('mysql') : $order->get_date_created()->date('Y-m-d H:i:s');
 							$updated_at = empty($order->get_date_modified()) ? current_time('mysql') : $order->get_date_modified()->date('Y-m-d H:i:s');
@@ -521,6 +567,20 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 					}
 				}
 				return $orders;
+	}
+
+	public function get_abandoned_carts(){
+		global $wpdb;
+		$woo_abandoned_carts = $wpdb->get_results( "SELECT * FROM wp_woocommerce_sessions");
+		$abandoned_carts=array();
+		foreach ($woo_abandoned_carts as $woo_abandoned_cart) {
+			$abandoned=unserialize($woo_abandoned_cart->session_value);
+			$abandoned_cart_result=unserialize($abandoned['customer']);
+			if($abandoned_cart_result['email']!='prash@gmail.com'){
+					$abandoned_carts[]=$abandoned_cart_result;
+			}
+		}
+		return $abandoned_carts;
 	}
 
 }
