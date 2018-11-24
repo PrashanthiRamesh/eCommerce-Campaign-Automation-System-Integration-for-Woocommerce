@@ -577,7 +577,13 @@ class Ecommerce_Campaign_Automation_System_Integration_For_Woocommerce {
 			$abandoned=unserialize($woo_abandoned_cart->session_value);
 			$abandoned_cart_result=unserialize($abandoned['customer']);
 			if($abandoned_cart_result['email']!='prash@gmail.com'){
-					$abandoned_carts[]=$abandoned_cart_result;
+				$date = new DateTime($abandoned_cart_result['date_modified']);
+					$abandoned_carts[]=array(
+						'email'=>$abandoned_cart_result['email'],
+						'first_name'=>$abandoned_cart_result['first_name'],
+						'last_name'=>$abandoned_cart_result['last_name'],
+						'date'=>$date->format('Y-m-d H:i:s')
+					);
 			}
 		}
 		return $abandoned_carts;
